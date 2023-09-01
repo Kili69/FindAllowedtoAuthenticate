@@ -40,34 +40,75 @@ possibility of such damages
 param(
     # alternate configuration file name
     [Parameter(Mandatory = $false)]
-    [String]$OU,
+    [String]$OU = "",
     [Parameter(Mandatory = $false)]
     [String]$ReportFile = ".\Report.csv"
 )
 
-#const
+#region constantes
 #GUID Active Directory Allowed-to-authenticate
 $AllowToAuthenticateGuid = "68b1d179-0d15-4d4f-ab71-46152e79a7bc"
-
+#GUID Full access
+$FullAccess = "00000000-0000-0000-0000-000000000000"
+#Named for Built in users. This value can change if your AD is localized
+$BuiltIn = "BUILTIN"
+#Well-know SIDs. This will indicate this is not a trusted domain
+$WknSID = "S-1-5-32-"
+#the local NT Authority can be ignored
+$NtAuth = "NT AUTHORITY"
+#To avoid call the Get-ADDomain CMDlet several times, the domain information is stored in this variable
 $Domain = Get-ADdomain
+#endregion
 
-if ($null -eq $OU){
+#if the OU parameter is not used, the script analyzed the entire AD
+if ($OU -eq ""){
     $OU= $Domain.DistinguishedName
 }
-$RemoteAccess = @{}
-
-$ADMembers = GetADcomputer -Filer * -Searchbase $OU
-$RemoteAccess = @{}
-
-
-For ($i=0; $i -lt $ADMembers.Count;$i++){
-    $completed = ($i*100/$ADMembers.count)
-    Write-Progress -Activity "Analyze computer" -Status " Computers $($ADMembers.Count) analyzed" -PercentComplete $completed
-    $Acl = GEt-acl -Path "AD:$($Computer.DistinguishedName)" | 
-    Select-Object -ExpandProperty access | 
-    Where-Object {($_.ObjectType -eq $AllowToAuthenticateGuid) -and ($_.IdentityReference -like "$($Domain.NetBiosName))\*")} |
-    Select-Object @{name = "Computer";expression={$Server}},
-                  @{name = "RemoteUser";expression={$_.IdentityReference}}
-    $RemoteAccess += $Acl
+else {
+    #Validate the path exists
+    if (!(Test-Path -Path "AD:$OU")){
+        Write-Host "OU $OU does not exist"
+        exit
+    }
 }
-$RemoteAccess
+
+#All results wil be collected in this array
+$RemoteAccess = @()
+#Count the computer object with foreigen AD objects in the ACL
+$ComputerCounter = 0
+#search for all computers in the OU and below
+$ADMembers = Get-ADComputer -Filter * -Searchbase $OU -SearchScope Subtree
+
+#It's time to analyze all collected computer object. 
+For ($i=0; $i -lt $ADMembers.Count;$i++){
+    #calculate the current progress and show the progress 
+    $completed = ($i*100/$ADMembers.count) 
+    Write-Progress -Activity "Analyze computer" -Status " Computers $($ADMembers.Count) analyzed" -PercentComplete $completed
+    # More details on the next command
+    #GEt-acl -Path "AD:$($ADMembers[$i].DistinguishedName)" | => collect the ACL from the computer object
+    #Select-Object -ExpandProperty access | => extend the ACE for the detail analysis
+    #Where-Object {(($_.ObjectType -eq $AllowToAuthenticateGuid) -or ($_.ObjectType -eq $FullAccess) )` => search only for ACE with "allow-to-authenticate" or full access
+    #     -and ($_.IdentityReference -notlike "$($Domain.NetBiosName)\*")` => Ignore any local user 
+    #     -and ($_.IdentityReference -notlike "$WknSID*") `                => Ignore well known Domain SIDs
+    #     -and ($_.IdentityReference -notlike "$BuiltIn\*")`               => Ignore Built-IN AD object
+    #     -and ($_.IdentityReference -notlike "$NTAuth\*")`                => Ignore the local NT Authority
+    #     -and ($_.IdentityReference -notlike "$($Domain.DomainSID)*")} |  => Ignore unknown local deleted objects 
+    $Acl = GEt-acl -Path "AD:$($ADMembers[$i].DistinguishedName)" | 
+    Select-Object -ExpandProperty access | 
+    Where-Object {(($_.ObjectType -eq $AllowToAuthenticateGuid) -or ($_.ObjectType -eq $FullAccess) )`
+         -and ($_.IdentityReference -notlike "$($Domain.NetBiosName)\*")`
+         -and ($_.IdentityReference -notlike "$WknSID*") `
+         -and ($_.IdentityReference -notlike "$BuiltIn\*")`
+         -and ($_.IdentityReference -notlike "$NTAuth\*")`
+         -and ($_.IdentityReference -notlike "$($Domain.DomainSID)*")} |
+    Select-Object @{name = "Computer";expression={$ADMembers[$i].DistinguishedName}},
+                  @{name = "RemoteUser";expression={$_.IdentityReference}}
+    #Only add objects with foreign ACE
+    if ($null -ne $acl){
+        $RemoteAccess +=($Acl)
+        $ComputerCounter++
+    }
+}
+Write-Progress -Completed -Activity "Analyze computer"
+$RemoteAccess | Export-Csv -Path $ReportFile -Force
+Write-Host "Found $($RemoteAccess.Count) enties on $ComputerCounter"
