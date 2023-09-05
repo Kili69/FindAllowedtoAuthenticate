@@ -95,7 +95,7 @@ $RemoteAccess = @()
 $ComputerCounter = 0
 #search for all computers in the OU and below
 try{
-$ADMembers = Get-ADComputer -Filter "OperatingSyetem -like '*Windows Server*' -and Enabled -eq 'True'" -Searchbase $OU -SearchScope Subtree
+$ADMembers = Get-ADComputer -Filter "OperatingSystem -like '*Windows Server*' -and Enabled -eq 'True'" -Searchbase $OU -SearchScope Subtree
 }
 catch {
     write-scriptlog -LogLevel "Err" -Message "unable to collect computer object - $($_.ScriptStackTrace)"
