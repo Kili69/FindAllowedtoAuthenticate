@@ -36,13 +36,17 @@ possibility of such damages
     Version Tracking
     0.1.20230901
         - First internal release
+    0.1.20230905
+        - show the current nummer ob the computer
 #>
 param(
     # alternate configuration file name
     [Parameter(Mandatory = $false)]
     [String]$OU = "",
     [Parameter(Mandatory = $false)]
-    [String]$ReportFile = ".\Report.csv"
+    [String]$ReportFile = ".\Report.csv",
+    [Parameter(Mandatory = $false)]
+    [string]$LogFile = ".\findAllowedToauthenticate.log"
 )
 
 #region constantes
@@ -60,6 +64,19 @@ $NtAuth = "NT AUTHORITY"
 $Domain = Get-ADdomain
 #endregion
 
+#region LogFile preparation
+Function write-scriptlog {
+    Param(
+        # error level
+        [Parameter(Mandatory = $true)]
+        [String] $LogLevel,
+        [Parameter(Mandatory = $true)]
+        [String] $Message
+    )
+    Add-Content $LogFile "$((get-date).tostring("yyyyMMdd-hh:mm:ss")) -$logLevel - $Message"
+}
+#endregion
+
 #if the OU parameter is not used, the script analyzed the entire AD
 if ($OU -eq ""){
     $OU= $Domain.DistinguishedName
@@ -71,19 +88,25 @@ else {
         exit
     }
 }
-
+write-scriptlog -LogLevel "info" -Message "script started on $OU"
 #All results wil be collected in this array
 $RemoteAccess = @()
 #Count the computer object with foreigen AD objects in the ACL
 $ComputerCounter = 0
 #search for all computers in the OU and below
-$ADMembers = Get-ADComputer -Filter * -Searchbase $OU -SearchScope Subtree
+try{
+$ADMembers = Get-ADComputer -Filter "OperatingSyetem -like '*Windows Server*' -and Enabled -eq 'True'" -Searchbase $OU -SearchScope Subtree
+}
+catch {
+    write-scriptlog -LogLevel "Err" -Message "unable to collect computer object - $($_.ScriptStackTrace)"
+    break
+}
 
 #It's time to analyze all collected computer object. 
 For ($i=0; $i -lt $ADMembers.Count;$i++){
     #calculate the current progress and show the progress 
     $completed = ($i*100/$ADMembers.count) 
-    Write-Progress -Activity "Analyze computer" -Status " Computers $($ADMembers.Count) analyzed" -PercentComplete $completed
+    Write-Progress -Activity "Analyze computer" -Status " $i Computers $($ADMembers.Count) analyzed" -PercentComplete $completed
     # More details on the next command
     #GEt-acl -Path "AD:$($ADMembers[$i].DistinguishedName)" | => collect the ACL from the computer object
     #Select-Object -ExpandProperty access | => extend the ACE for the detail analysis
@@ -93,20 +116,26 @@ For ($i=0; $i -lt $ADMembers.Count;$i++){
     #     -and ($_.IdentityReference -notlike "$BuiltIn\*")`               => Ignore Built-IN AD object
     #     -and ($_.IdentityReference -notlike "$NTAuth\*")`                => Ignore the local NT Authority
     #     -and ($_.IdentityReference -notlike "$($Domain.DomainSID)*")} |  => Ignore unknown local deleted objects 
-    $Acl = GEt-acl -Path "AD:$($ADMembers[$i].DistinguishedName)" | 
-    Select-Object -ExpandProperty access | 
-    Where-Object {(($_.ObjectType -eq $AllowToAuthenticateGuid) -or ($_.ObjectType -eq $FullAccess) )`
-         -and ($_.IdentityReference -notlike "$($Domain.NetBiosName)\*")`
-         -and ($_.IdentityReference -notlike "$WknSID*") `
-         -and ($_.IdentityReference -notlike "$BuiltIn\*")`
-         -and ($_.IdentityReference -notlike "$NTAuth\*")`
-         -and ($_.IdentityReference -notlike "$($Domain.DomainSID)*")} |
-    Select-Object @{name = "Computer";expression={$ADMembers[$i].DistinguishedName}},
-                  @{name = "RemoteUser";expression={$_.IdentityReference}}
-    #Only add objects with foreign ACE
-    if ($null -ne $acl){
-        $RemoteAccess +=($Acl)
-        $ComputerCounter++
+    try{
+        $Acl = GEt-acl -Path "AD:$($ADMembers[$i].DistinguishedName)" | 
+        Select-Object -ExpandProperty access | 
+        Where-Object {(($_.ObjectType -eq $AllowToAuthenticateGuid) -or ($_.ObjectType -eq $FullAccess) )`
+             -and ($_.IdentityReference -notlike "$($Domain.NetBiosName)\*")`
+             -and ($_.IdentityReference -notlike "$WknSID*") `
+             -and ($_.IdentityReference -notlike "$BuiltIn\*")`
+             -and ($_.IdentityReference -notlike "$NTAuth\*")`
+             -and ($_.IdentityReference -notlike "$($Domain.DomainSID)*")} |
+        Select-Object @{name = "Computer";expression={$ADMembers[$i].DistinguishedName}},
+                      @{name = "RemoteUser";expression={$_.IdentityReference}}
+        #Only add objects with foreign ACE
+        if ($null -ne $acl){
+            $RemoteAccess +=($Acl)
+            $ComputerCounter++
+        }
+    }
+    catch{
+        write-scriptlog -LogLevel "err" -Message "A error occurs on $($ADMembers[$i].DistinguishedName) - $($_.ScriptStackTrace)"
+        Write-Host "A error occurs on number $i $($ADMembers[$i].DistinguishedName ) $($_.ScriptStackTrace)" -ForegroundColor Red
     }
 }
 Write-Progress -Completed -Activity "Analyze computer"
