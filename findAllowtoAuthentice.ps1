@@ -38,6 +38,8 @@ possibility of such damages
         - First internal release
     0.1.20230905
         - show the current nummer ob the computer
+    0.1.20230907
+        - show the CSV file path 
 #>
 param(
     # alternate configuration file name
@@ -141,3 +143,4 @@ For ($i=0; $i -lt $ADMembers.Count;$i++){
 Write-Progress -Completed -Activity "Analyze computer"
 $RemoteAccess | Export-Csv -Path $ReportFile -Force
 Write-Host "Found $($RemoteAccess.Count) enties on $ComputerCounter"
+Write-Host "please check $ReportFile"
