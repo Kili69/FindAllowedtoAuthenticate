@@ -40,6 +40,9 @@ possibility of such damages
         - show the current nummer ob the computer
     0.1.20230907
         - show the CSV file path 
+        - addtional output
+    0.1.20230911
+        - Now is looks for remote users which indirect get the "allow-to-authenticate" due group nesting
 #>
 param(
     # alternate configuration file name
@@ -52,10 +55,9 @@ param(
 )
 
 #region constantes
+$ScriptVersion = "2023091106"
 #GUID Active Directory Allowed-to-authenticate
 $AllowToAuthenticateGuid = "68b1d179-0d15-4d4f-ab71-46152e79a7bc"
-#GUID Full access
-$FullAccess = "00000000-0000-0000-0000-000000000000"
 #Named for Built in users. This value can change if your AD is localized
 $BuiltIn = "BUILTIN"
 #Well-know SIDs. This will indicate this is not a trusted domain
@@ -79,6 +81,7 @@ Function write-scriptlog {
 }
 #endregion
 
+
 #if the OU parameter is not used, the script analyzed the entire AD
 if ($OU -eq ""){
     $OU= $Domain.DistinguishedName
@@ -95,44 +98,69 @@ write-scriptlog -LogLevel "info" -Message "script started on $OU"
 $RemoteAccess = @()
 #Count the computer object with foreigen AD objects in the ACL
 $ComputerCounter = 0
+#Enuerate the domain local groups where foreign users are member of
+$GroupWithForeignMembers = @()
 #search for all computers in the OU and below
+Write-Host "Script $ScriptVersion started at $(Get-Date) "
 try{
-$ADMembers = Get-ADComputer -Filter "OperatingSystem -like '*Windows Server*' -and Enabled -eq 'True'" -Searchbase $OU -SearchScope Subtree
+    
+    Foreach ($ForeignPrincipal in Get-ADObject -Filter {(ObjectClass -eq "foreignSecurityPrincipal") -and (Name -like "S-1-5-21*")} -Properties MemberOf){
+        Foreach ($MemberOf in $ForeignPrincipal.MemberOf){
+            $ForeignADObject = New-Object psObject
+            $ForeignADObject | Add-Member NoteProperty -Name "GroupName" -Value "$((Get-ADDomain).NetBiosName)\$((Get-ADObject -Filter {DistinguishedName -eq $MemberOf} -Properties CN).CN)"
+            $ForeignADObject | Add-Member NoteProperty -Name "Reference" -Value $ForeignPrincipal
+            $GroupWithForeignMembers += $ForeignADObject
+        }
+    }
+    Write-Host "Found $($GroupWithForeignMembers.count) groups who contains foreign members in local groups"
+    $ADMembers = Get-ADComputer -Filter {(OperatingSystem -like '*Windows Server*') -and (Enabled -eq $True)} -Searchbase $OU -SearchScope Subtree
+    Write-Host "Found $($ADMembers.Count) computers to analyzed"
 }
 catch {
     write-scriptlog -LogLevel "Err" -Message "unable to collect computer object - $($_.ScriptStackTrace)"
     break
 }
 
+
 #It's time to analyze all collected computer object. 
 For ($i=0; $i -lt $ADMembers.Count;$i++){
     #calculate the current progress and show the progress 
     $completed = ($i*100/$ADMembers.count) 
     Write-Progress -Activity "Analyze computer" -Status " $i Computers $($ADMembers.Count) analyzed" -PercentComplete $completed
-    # More details on the next command
-    #GEt-acl -Path "AD:$($ADMembers[$i].DistinguishedName)" | => collect the ACL from the computer object
-    #Select-Object -ExpandProperty access | => extend the ACE for the detail analysis
-    #Where-Object {(($_.ObjectType -eq $AllowToAuthenticateGuid) -or ($_.ObjectType -eq $FullAccess) )` => search only for ACE with "allow-to-authenticate" or full access
-    #     -and ($_.IdentityReference -notlike "$($Domain.NetBiosName)\*")` => Ignore any local user 
-    #     -and ($_.IdentityReference -notlike "$WknSID*") `                => Ignore well known Domain SIDs
-    #     -and ($_.IdentityReference -notlike "$BuiltIn\*")`               => Ignore Built-IN AD object
-    #     -and ($_.IdentityReference -notlike "$NTAuth\*")`                => Ignore the local NT Authority
-    #     -and ($_.IdentityReference -notlike "$($Domain.DomainSID)*")} |  => Ignore unknown local deleted objects 
+
     try{
-        $Acl = GEt-acl -Path "AD:$($ADMembers[$i].DistinguishedName)" | 
-        Select-Object -ExpandProperty access | 
-        Where-Object {(($_.ObjectType -eq $AllowToAuthenticateGuid) -or ($_.ObjectType -eq $FullAccess) )`
-             -and ($_.IdentityReference -notlike "$($Domain.NetBiosName)\*")`
-             -and ($_.IdentityReference -notlike "$WknSID*") `
-             -and ($_.IdentityReference -notlike "$BuiltIn\*")`
-             -and ($_.IdentityReference -notlike "$NTAuth\*")`
-             -and ($_.IdentityReference -notlike "$($Domain.DomainSID)*")} |
-        Select-Object @{name = "Computer";expression={$ADMembers[$i].DistinguishedName}},
-                      @{name = "RemoteUser";expression={$_.IdentityReference}}
-        #Only add objects with foreign ACE
-        if ($null -ne $acl){
-            $RemoteAccess +=($Acl)
-            $ComputerCounter++
+        #collect the ACL of the computer
+        $Acl = Get-Acl -Path "AD:$($ADMembers[$i].DistinguishedName)" | Select-Object -ExpandProperty access  
+        Foreach ($Ace in $ACl){
+            #searching for Allowed-to-Authenticate and Full control
+            if (($Ace.ObjectType -eq $AllowToAuthenticateGuid) -or ($Ace.ActiveDirectoryRights -eq "GenericAll")){
+                #exclude well-known-SID, builtin identities, NT Authority and unresolveable SID from the current domain
+                if (($Ace.IdentityReference -notlike "$WknSID*") -and`
+                    ($Ace.IdentityReference -notlike "$BuiltIn\*") -and`
+                    ($Ace.IdentityReference -notlike "$NTAuth\*") -and`
+                    ($Ace.IdentityReference -notlike "$($Domain.DomainSid)*")
+                ){
+                    #if the ACE shows a foreigen domain create a new entry
+                    if ($Ace.IdentityReference -notlike "$($Domain.NetBIOSName)\*"){
+                        $NewComputer2Add = New-Object psObject
+                        $NewComputer2Add | Add-Member NoteProperty -Name "Computer"  -Value $ADMembers[$i].DistinguishedName
+                        $NewComputer2Add | Add-Member NoteProperty -Name "Identity"  -Value $Ace.IdentityReference
+                        $NewComputer2Add | Add-Member NoteProperty -Name "Reference" -Value $Ace.IdentityReference
+                        $RemoteAccess += $NewComputer2Add
+                    } else {
+                        #on any local ACE check if they are in the list with nexted foreign groups
+                        foreach ($Group in $GroupWithForeignMembers){
+                            if ($Ace.IdentityReference -eq "$($Group.GroupName)"){
+                                $NewComputer2Add = New-Object psObject
+                                $NewComputer2Add | Add-Member NoteProperty -Name "Computer" -Value $ADMembers[$i].DistinguishedName
+                                $NewComputer2Add | Add-Member NoteProperty -Name "Identity" -Value $Ace.IdentityReference
+                                $NewComputer2Add | Add-Member NoteProperty -Name "Reference" -Value $Group.Reference
+                                $RemoteAccess += $NewComputer2Add
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     catch{
@@ -141,6 +169,6 @@ For ($i=0; $i -lt $ADMembers.Count;$i++){
     }
 }
 Write-Progress -Completed -Activity "Analyze computer"
-$RemoteAccess | Export-Csv -Path $ReportFile -Force
-Write-Host "Found $($RemoteAccess.Count) enties on $ComputerCounter"
+$RemoteAccess | Export-Csv -Path $ReportFile -Force -NoTypeInformation
+Write-Host "Found $($RemoteAccess.Count) ACL entries on $($ADMembers.count) computers"
 Write-Host "please check $ReportFile"

@@ -6,3 +6,52 @@
 20230905-10:27:50 -info - script started on DC=bloedgelaber,DC=de
 20230905-10:28:18 -info - script started on DC=bloedgelaber,DC=de
 20230905-10:30:09 -info - script started on DC=bloedgelaber,DC=de
+20230907-08:36:11 -info - script started on DC=bloedgelaber,DC=de
+20230907-08:56:26 -info - script started on DC=bloedgelaber,DC=de
+20230907-08:56:44 -info - script started on DC=bloedgelaber,DC=de
+20230907-09:19:05 -info - script started on DC=bloedgelaber,DC=de
+20230907-09:35:21 -info - script started on DC=bloedgelaber,DC=de
+20230907-09:35:22 -DBG - Found ACL on CN=BG-CA1,OU=Computers,OU=BG-T0,DC=bloedgelaber,DC=de
+20230907-09:36:21 -info - script started on DC=bloedgelaber,DC=de
+20230907-09:36:21 -DBG - Found ACL on CN=BG-CA1,OU=Computers,OU=BG-T0,DC=bloedgelaber,DC=de
+20230911-10:27:48 -info - script started on DC=bloedgelaber,DC=de
+20230911-10:29:21 -info - script started on DC=bloedgelaber,DC=de
+20230911-04:42:11 -info - script started on DC=bloedgelaber,DC=de
+20230911-04:49:21 -info - script started on DC=bloedgelaber,DC=de
+20230911-04:49:53 -Err - unable to collect computer object - at <ScriptBlock>, C:\Repos\FindAllowedtoAuthenticate-2\findAllowtoAuthentice.ps1: line 112
+at <ScriptBlock>, <No file>: line 1
+20230911-04:50:38 -info - script started on DC=bloedgelaber,DC=de
+20230911-04:51:30 -info - script started on DC=bloedgelaber,DC=de
+20230911-04:59:29 -info - script started on DC=bloedgelaber,DC=de
+20230911-04:59:44 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:01:22 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:03:17 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:05:13 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:06:33 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:06:37 -Err - unable to collect computer object - at <ScriptBlock>, C:\Repos\FindAllowedtoAuthenticate-2\findAllowtoAuthentice.ps1: line 113
+at <ScriptBlock>, <No file>: line 1
+20230911-05:06:56 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:08:15 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:09:17 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:11:33 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:14:58 -err - A error occurs on CN=BG-CA1,OU=Computers,OU=BG-T0,DC=bloedgelaber,DC=de - at <ScriptBlock>, C:\Repos\FindAllowedtoAuthenticate-2\findAllowtoAuthentice.ps1: line 145
+at <ScriptBlock>, <No file>: line 1
+20230911-05:15:12 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:17:30 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:18:18 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:18:38 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:21:16 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:24:17 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:27:49 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:30:26 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:44:39 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:48:38 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:48:56 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:58:36 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:59:00 -info - script started on DC=bloedgelaber,DC=de
+20230911-05:59:39 -info - script started on DC=bloedgelaber,DC=de
+20230911-06:00:47 -info - script started on DC=bloedgelaber,DC=de
+20230911-06:01:12 -info - script started on DC=bloedgelaber,DC=de
+20230911-06:02:17 -info - script started on DC=bloedgelaber,DC=de
+20230911-06:10:38 -info - script started on DC=bloedgelaber,DC=de
+20230911-06:15:26 -info - script started on DC=bloedgelaber,DC=de
